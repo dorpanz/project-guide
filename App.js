@@ -42,7 +42,7 @@ export default function App() {
             return <Ionicons name={iconName} size={size} color={color} />;
           },
           tabBarActiveTintColor: '#FF69B4',  
-          tabBarInactiveTintColor: 'gray',  
+          tabBarInactiveTintColor: 'dark gray',  
         })}
       >
         <Tab.Screen
