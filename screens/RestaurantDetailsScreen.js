@@ -188,7 +188,7 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
         <Text style={styles.directionsButtonText}>Get Directions</Text>
       </TouchableOpacity>
 
-      
+      {/* Edit Button */}
       <TouchableOpacity
         style={styles.editButton}
         onPress={() =>
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
- 
+  // Edit Button Styles
   editButton: {
     backgroundColor: '#a3b18a',
     paddingVertical: 12,

@@ -87,7 +87,7 @@ export default function RestaurantListScreen({ navigation, route }) {
         )}
       />
 
-      
+      {/* Add Restaurant Button */}
       <TouchableOpacity
         style={styles.addButton}
         onPress={() =>
