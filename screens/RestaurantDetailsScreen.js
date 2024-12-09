@@ -1,41 +1,127 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Button,
   TextInput,
   TouchableOpacity,
+  Alert,
+  Platform,
+  Linking,
+  PermissionsAndroid,
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RestaurantDetailsScreen({ route, navigation }) {
-  const { restaurant } = route.params;
+  const { restaurant: initialRestaurant } = route.params;
 
-  const [reviews, setReviews] = useState([
-    { id: 1, text: 'Great food and ambiance!', rating: 5 },
-    { id: 2, text: 'Service was a bit slow, but overall nice.', rating: 3 },
-  ]);
-
+  const [restaurant, setRestaurant] = useState(initialRestaurant);
+  const [reviews, setReviews] = useState([]);
   const [newReview, setNewReview] = useState('');
   const [newRating, setNewRating] = useState('');
 
-  const addReview = () => {
-    if (newReview && newRating) {
-      const newEntry = {
-        id: Date.now(),
-        text: newReview,
-        rating: parseInt(newRating, 10),
-      };
-      setReviews([...reviews, newEntry]);
-      setNewReview('');
-      setNewRating('');
+  useEffect(() => {
+    const loadUpdatedRestaurant = async () => {
+      try {
+        const storedRestaurants = await AsyncStorage.getItem('restaurantDetails');
+        if (storedRestaurants) {
+          const updatedRestaurant = JSON.parse(storedRestaurants).find(
+            (r) => r.id === initialRestaurant.id
+          );
+          if (updatedRestaurant) {
+            setRestaurant(updatedRestaurant);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load updated restaurant:', error);
+      }
+    };
+  
+    loadUpdatedRestaurant();
+  }, []);
+  
+
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        const savedReviews = await AsyncStorage.getItem(`reviews_${restaurant.id}`);
+        if (savedReviews) {
+          setReviews(JSON.parse(savedReviews));
+        }
+      } catch (error) {
+        console.error('Failed to load reviews:', error);
+      }
+    };
+    fetchReviews();
+  }, [restaurant.id]);
+
+  const saveReviews = async (newReviews) => {
+    try {
+      await AsyncStorage.setItem(`reviews_${restaurant.id}`, JSON.stringify(newReviews));
+      setReviews(newReviews);
+    } catch (error) {
+      console.error('Failed to save reviews:', error);
     }
   };
 
+  const addReview = () => {
+    if (!newReview || !newRating) {
+      Alert.alert('Validation Error', 'Please fill both review and rating fields.');
+      return;
+    }
+
+    const rating = parseInt(newRating, 10);
+    if (isNaN(rating) || rating < 1 || rating > 5) {
+      Alert.alert('Validation Error', 'Rating must be a number between 1 and 5.');
+      return;
+    }
+
+    const newEntry = {
+      id: Date.now(),
+      text: newReview.trim(),
+      rating,
+    };
+
+    const updatedReviews = [...reviews, newEntry];
+    saveReviews(updatedReviews);
+
+    setNewReview('');
+    setNewRating('');
+  };
+
   const removeReview = (id) => {
-    setReviews(reviews.filter((review) => review.id !== id));
+    const updatedReviews = reviews.filter((review) => review.id !== id);
+    saveReviews(updatedReviews);
+  };
+
+  const requestLocationPermission = async () => {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+      );
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Permission Denied', 'Location permission is required to get directions.');
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const getDirections = async () => {
+    const hasPermission = await requestLocationPermission();
+    if (!hasPermission) return;
+
+    const { latitude, longitude } = restaurant;
+    const url = Platform.OS === 'ios'
+      ? `http://maps.apple.com/?daddr=${latitude},${longitude}`
+      : `google.navigation:q=${latitude},${longitude}`;
+
+    Linking.openURL(url).catch((err) => {
+      Alert.alert('Error', 'Unable to open directions.');
+      console.error(err);
+    });
   };
 
   return (
@@ -54,7 +140,7 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
 
       <MapView
         style={styles.map}
-        initialRegion={{
+        region={{
           latitude: restaurant.latitude,
           longitude: restaurant.longitude,
           latitudeDelta: 0.01,
@@ -94,13 +180,27 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
         value={newRating}
         onChangeText={setNewRating}
       />
-      <Button title="Add Review" onPress={addReview} color="#FF69B4" />
+      <TouchableOpacity style={styles.addButton} onPress={addReview}>
+        <Text style={styles.addButtonText}>Add Review</Text>
+      </TouchableOpacity>
 
-      <Button
-        title="Get Directions"
-        onPress={() => alert('Opening navigation app...')}
-        color="#FFA07A"
-      />
+      <TouchableOpacity style={styles.directionsButton} onPress={getDirections}>
+        <Text style={styles.directionsButtonText}>Get Directions</Text>
+      </TouchableOpacity>
+
+      
+      <TouchableOpacity
+        style={styles.editButton}
+        onPress={() =>
+          navigation.navigate('AddRestaurant', { restaurant, onSave: (updatedRestaurant) => {
+            setRestaurant(updatedRestaurant); 
+          } })
+        }
+      >
+        <Text style={styles.editButtonText}>Edit Restaurant</Text>
+      </TouchableOpacity>
+
+
     </ScrollView>
   );
 }
@@ -163,5 +263,42 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     padding: 10,
     marginBottom: 10,
+  },
+  addButton: {
+    backgroundColor: '#FF69B4',
+    paddingVertical: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  addButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  directionsButton: {
+    backgroundColor: '#FFA07A',
+    paddingVertical: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  directionsButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+ 
+  editButton: {
+    backgroundColor: '#a3b18a',
+    paddingVertical: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  editButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

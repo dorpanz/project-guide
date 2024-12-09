@@ -1,49 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const dummyRestaurants = [
-    {
-      id: '1',
-      name: 'Pasta Palace',
-      address: '123 Main St, Toronto, ON',
-      phone: '123-456-7890',
-      description: 'Delicious Italian cuisine',
-      tags: ['Italian', 'Family'],
-      latitude: 43.642422,
-      longitude: -79.377159, 
-    },
-    {
-      id: '2',
-      name: 'Vegan Delight',
-      address: '456 Elm St, Toronto, ON',
-      phone: '456-789-0123',
-      description: 'Healthy vegan meals',
-      tags: ['Vegan', 'Organic'],
-      latitude: 43.78925,
-      longitude: -79.4224, 
-    },
-  ];
-  
+const dummyLocations = [
+  { id: '1', name: 'Pasta Palace', address: '123 Pasta Street', latitude: 43.642422, longitude: -79.377159, tags: ['Italian', 'Pasta'] },
+  { id: '2', name: 'Vegan Delight', address: '456 Green Way', latitude: 43.78925, longitude: -79.4224, tags: ['Vegan', 'Healthy'] },
+];
 
-export default function RestaurantListScreen({ navigation }) {
+export default function RestaurantListScreen({ navigation, route }) {
+  const [restaurants, setRestaurants] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredRestaurants, setFilteredRestaurants] = useState(dummyRestaurants);
+  const [filteredRestaurants, setFilteredRestaurants] = useState([]);
+
+  const loadRestaurants = async () => {
+    try {
+      const storedRestaurants = await AsyncStorage.getItem('restaurantDetails');
+      const parsedRestaurants = storedRestaurants ? JSON.parse(storedRestaurants) : [];
+      
+      
+      const combinedRestaurants = [...dummyLocations, ...parsedRestaurants];
+
+      setRestaurants(combinedRestaurants);
+      setFilteredRestaurants(combinedRestaurants); 
+    } catch (error) {
+      console.error('Failed to load restaurants:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadRestaurants();
+  }, []);
+
+  useEffect(() => {
+    if (route.params?.refresh) {
+      loadRestaurants();  
+    }
+  }, [route.params?.refresh]);
 
   const handleSearch = (text) => {
     setSearchQuery(text);
-    const filteredData = dummyRestaurants.filter((restaurant) => {
+    const filteredData = restaurants.filter((restaurant) => {
       const nameMatch = restaurant.name.toLowerCase().includes(text.toLowerCase());
-      const tagsMatch = restaurant.tags.some(tag =>
+      const tagsMatch = restaurant.tags.some((tag) =>
         tag.toLowerCase().includes(text.toLowerCase())
       );
-      return nameMatch || tagsMatch; // Search by name or tag
+      return nameMatch || tagsMatch;
     });
     setFilteredRestaurants(filteredData);
   };
 
+  const handleAddRestaurant = (newRestaurant) => {
+    const updatedRestaurants = [...restaurants, newRestaurant];
+    setRestaurants(updatedRestaurants);
+    setFilteredRestaurants(updatedRestaurants); 
+    AsyncStorage.setItem('restaurantDetails', JSON.stringify(updatedRestaurants));
+  };
+
   return (
     <View style={{ flex: 1, padding: 20, backgroundColor: '#FFF0F5' }}>
-      {/* Search Bar */}
+      
       <TextInput
         style={styles.searchInput}
         placeholder="Search by name or tags"
@@ -71,11 +86,15 @@ export default function RestaurantListScreen({ navigation }) {
           </TouchableOpacity>
         )}
       />
+
       
-      {/* Add Restaurant Button */}
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => navigation.navigate('AddRestaurant')}
+        onPress={() =>
+          navigation.navigate('AddRestaurant', {
+            onSave: handleAddRestaurant, 
+          })
+        }
       >
         <Text style={styles.addButtonText}>+ Add Restaurant</Text>
       </TouchableOpacity>
